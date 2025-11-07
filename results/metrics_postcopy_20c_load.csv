@@ -1,0 +1,2 @@
+run_id,strategy,migration_time_s,downtime_s,packet_loss_during_migration_pct,latency_avg_pre_ms,latency_avg_during_ms,latency_avg_post_ms,state_inconsistency
+postcopy_20c_load,postcopy,0.27344274520874023,0.3076469898223877,31.57894736842105,6.341968540829987,306.89161538461536,11.588351262709084,161

@@ -1,0 +1,2 @@
+run_id,strategy,migration_time_s,downtime_s,packet_loss_during_migration_pct,latency_avg_pre_ms,latency_avg_during_ms,latency_avg_post_ms,state_inconsistency
+base_run_001,precopy,0.24820613861083984,0.3115520477294922,0.0,5.225330612244898,75.263,4.324,0

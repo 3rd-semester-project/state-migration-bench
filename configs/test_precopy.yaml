@@ -1,0 +1,14 @@
+general:
+  run_id: "precopy_5c_lowlat"
+  results_dir: "results"
+
+clients:
+  count: 5
+  rate_hz: 15
+  payload_bytes: 128
+  timeout_ms: 800
+
+migration:
+  strategy: "precopy"
+  delay_s: 4
+  postcopy_sync_s: 5

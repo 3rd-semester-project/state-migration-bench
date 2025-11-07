@@ -1,0 +1,14 @@
+general:
+  run_id: "postcopy_20c_load"
+  results_dir: "results"
+
+clients:
+  count: 20
+  rate_hz: 20
+  payload_bytes: 64
+  timeout_ms: 800
+
+migration:
+  strategy: "postcopy"
+  delay_s: 6
+  postcopy_sync_s: 8
