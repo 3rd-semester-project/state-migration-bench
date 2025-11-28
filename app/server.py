@@ -15,6 +15,9 @@ STATE: Dict[str, Any] = {
     "counter": 0,
     "last_seq": -1,
     "updated_ts": time.time(),
+    # track last payload details so state size reflects ingested payloads
+    "payload_size": 0,
+    "payload_blob": "",
 }
 
 
@@ -32,6 +35,21 @@ def ingest():
         if seq > STATE.get("last_seq", -1):
             STATE["last_seq"] = seq
             STATE["counter"] = int(STATE.get("counter", 0)) + 1
+            # Accumulate payloads: append the client blob and update total size.
+            # This makes STATE grow as more client messages are ingested (intended
+            # for testing how migration behaves with increasing state sizes).
+            try:
+                blob = payload.get("blob", "") or ""
+            except Exception:
+                blob = ""
+            try:
+                # prefer explicit size if provided, otherwise use actual blob length
+                size = int(payload.get("size", len(blob)))
+            except Exception:
+                size = len(blob)
+            # Append blob and update cumulative size
+            STATE["payload_blob"] = (STATE.get("payload_blob", "") or "") + blob
+            STATE["payload_size"] = int(STATE.get("payload_size", 0)) + len(blob)
             STATE["updated_ts"] = time.time()
     return jsonify({"ack": True, "seq": seq, "server": STATE["server"], "counter": STATE["counter"]})
 
@@ -47,6 +65,14 @@ def state():
         # Merge: keep the max counter and last_seq
         STATE["counter"] = max(int(STATE.get("counter", 0)), int(data.get("counter", 0)))
         STATE["last_seq"] = max(int(STATE.get("last_seq", -1)), int(data.get("last_seq", -1)))
+        # If incoming state has a payload_blob/size, prefer the one with larger payload_size
+        try:
+            incoming_size = int(data.get("payload_size", -1))
+        except Exception:
+            incoming_size = -1
+        if incoming_size >= 0 and incoming_size >= int(STATE.get("payload_size", 0)):
+            STATE["payload_size"] = incoming_size
+            STATE["payload_blob"] = data.get("payload_blob", "") or ""
         STATE["updated_ts"] = time.time()
     return jsonify({"imported": True})
 

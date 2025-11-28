@@ -23,6 +23,7 @@ class Metrics:
     latency_avg_during_ms: float
     latency_avg_post_ms: float
     state_inconsistency: int
+    state_size_bytes: int = 0
 
 
 class MetricsCollector:
@@ -78,6 +79,7 @@ class MetricsCollector:
         win: MigrationWindow,
         state_diff: int,
         strategy: str,
+        state_size_bytes: int = 0,
     ) -> Metrics:
         rows = self._parse_client_logs(containers)
         pre, during, post = self._window_slices(rows, win)
@@ -105,4 +107,5 @@ class MetricsCollector:
             latency_avg_during_ms=latency_during,
             latency_avg_post_ms=latency_post,
             state_inconsistency=state_diff,
+            state_size_bytes=state_size_bytes,
         )

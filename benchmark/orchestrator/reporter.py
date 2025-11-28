@@ -17,8 +17,23 @@ class Reporter:
         self.results_dir = Path(cfg.general.results_dir)
 
     def save_metrics_csv(self, m: Metrics) -> Path:
-        out = self.results_dir / f"metrics_{self.cfg.general.run_id}.csv"
-        write_csv(out, [asdict(m)], list(asdict(m).keys()))
+        # Save metrics aggregated by strategy into a single CSV per strategy.
+        # Use `run_id` as a column instead of naming files by run id.
+        out = self.results_dir / f"metrics_{m.strategy}.csv"
+        out.parent.mkdir(parents=True, exist_ok=True)
+
+        row = asdict(m)
+        fieldnames = list(row.keys())
+
+        # Append if file exists, otherwise create and write header
+        import csv
+
+        write_header = not out.exists()
+        with out.open("a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
         return out
 
     def plot_metrics(self, m: Metrics) -> Path:
@@ -27,7 +42,7 @@ class Reporter:
 
         # Two subplots: time vs downtime+migration_time and latency bars
         fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-        fig.suptitle(f"Migration metrics [{m.strategy}] - run {m.run_id}")
+        fig.suptitle(f"Migration metrics [{m.strategy}] - run {m.run_id} | state_size={m.state_size_bytes} bytes")
 
         # Times
         axes[0].bar(["migration_time", "downtime"], [m.migration_time_s, m.downtime_s], color=["#4e79a7", "#f28e2c"])
@@ -43,6 +58,6 @@ class Reporter:
         axes[1].set_title(f"loss during: {m.packet_loss_during_migration_pct:.1f}% | inconsistency: {m.state_inconsistency}")
 
         plt.tight_layout()
-        plt.savefig(out_png, dpi=120)
+        #plt.savefig(out_png, dpi=120)
         plt.close(fig)
         return out_png

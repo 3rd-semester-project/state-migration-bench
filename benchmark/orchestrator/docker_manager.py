@@ -71,6 +71,34 @@ class DockerManager:
         net_name = self.cfg.servers.network_name
         return net_name in (container.attrs.get("NetworkSettings", {}).get("Networks") or {})
 
+    def log_container_info(self, container: Container) -> None:
+        try:
+            container.reload()
+            nets = container.attrs.get("NetworkSettings", {}).get("Networks") or {}
+            print(f"Container '{container.name}': status={container.status}")
+            print(f"  Attached networks: {list(nets.keys())}")
+            for net_name, info in nets.items():
+                ip = info.get("IPAddress")
+                aliases = info.get("Aliases")
+                print(f"    - {net_name}: IPAddress={ip}, Aliases={aliases}")
+        except Exception as e:
+            print(f"Error reading container info for {getattr(container, 'name', '?')}: {e}")
+
+    def wait_for_container_attached(self, container: Container, timeout_s: float = 10.0, interval_s: float = 0.5) -> bool:
+        """Wait until the container is attached to the configured network. Returns True if attached."""
+        start = time.time()
+        while time.time() - start < timeout_s:
+            try:
+                if self._is_in_network(container):
+                    self.log_container_info(container)
+                    return True
+            except Exception:
+                pass
+            time.sleep(interval_s)
+        # Final info dump
+        self.log_container_info(container)
+        return False
+
     def _disconnect_if_connected(self, container: Container) -> None:
         try:
             if self._is_in_network(container):
@@ -98,6 +126,11 @@ class DockerManager:
         self._remove_if_exists("server_a")
         self._remove_if_exists("server_b")
 
+        # Publish server ports to host so the orchestrator (running on the host)
+        # can reach container endpoints via localhost. Map server_a -> host:port,
+        # server_b -> host:(port+1).
+        host_port_a = port
+        host_port_b = port + 1
         server_a = self.client.containers.run(
             self.cfg.servers.image_server,
             name="server_a",
@@ -107,7 +140,7 @@ class DockerManager:
                 "PORT": str(port),
             },
             network=net,
-            ports={},
+            ports={f"{port}/tcp": host_port_a},
         )
         server_b = self.client.containers.run(
             self.cfg.servers.image_server,
@@ -118,12 +151,17 @@ class DockerManager:
                 "PORT": str(port),
             },
             network=net,
-            ports={},
+            ports={f"{port}/tcp": host_port_b},
         )
         # Give both time to start
         time.sleep(1.0)
         # Ensure alias points to A (reconnect with alias)
         self.attach_alias(server_a)
+        try:
+            print(f"Published server_a -> localhost:{host_port_a}")
+            print(f"Published server_b -> localhost:{host_port_b}")
+        except Exception:
+            pass
         return server_a, server_b
 
     def run_clients(self) -> list[Container]:
@@ -187,6 +225,44 @@ class DockerManager:
     # Helper
 
     def get_container_ip(self, container: Container) -> str:
-        container.reload()
-        net_name = self.cfg.servers.network_name
-        return container.attrs["NetworkSettings"]["Networks"][net_name]["IPAddress"]
+        try:
+            container.reload()
+            net_name = self.cfg.servers.network_name
+            nets = container.attrs.get("NetworkSettings", {}).get("Networks") or {}
+            if net_name not in nets:
+                raise RuntimeError(f"Container '{container.name}' not attached to network '{net_name}'; attachments={list(nets.keys())}")
+            ip = nets[net_name].get("IPAddress")
+            print(f"Resolved IP for {container.name} on network '{net_name}': {ip}")
+            return ip
+        except Exception as e:
+            print(f"Error obtaining IP for {getattr(container, 'name', '?')}: {e}")
+            raise
+
+    def get_published_port(self, container: Container, internal_port: int) -> Optional[int]:
+        """Return the host port that the container's internal port is published to, or None."""
+        try:
+            container.reload()
+            ports = container.attrs.get("NetworkSettings", {}).get("Ports") or {}
+            key = f"{internal_port}/tcp"
+            mapping = ports.get(key)
+            if not mapping:
+                return None
+            # mapping is a list of dicts like [{'HostIp': '0.0.0.0', 'HostPort': '5000'}]
+            host_port = int(mapping[0]["HostPort"])
+            print(f"Container '{container.name}' internal port {internal_port} published on host port {host_port}")
+            return host_port
+        except Exception as e:
+            print(f"Error reading published ports for {getattr(container, 'name', '?')}: {e}")
+            return None
+
+    def endpoint_url(self, container: Container, path: str, internal_port: int | None = None) -> str:
+        """Return a URL usable from the orchestrator process to reach the container's HTTP endpoint.
+        If the container has the internal_port published to the host, return localhost:hostport, otherwise use internal IP.
+        """
+        port = internal_port or self.cfg.servers.port
+        host_port = self.get_published_port(container, port)
+        if host_port:
+            return f"http://localhost:{host_port}{path}"
+        # fallback to container IP
+        ip = self.get_container_ip(container)
+        return f"http://{ip}:{port}{path}"
