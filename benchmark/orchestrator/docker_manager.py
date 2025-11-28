@@ -107,7 +107,7 @@ class DockerManager:
                 "PORT": str(port),
             },
             network=net,
-            ports={},
+            ports = {f"{port}/tcp": port}
         )
         server_b = self.client.containers.run(
             self.cfg.servers.image_server,
@@ -118,7 +118,7 @@ class DockerManager:
                 "PORT": str(port),
             },
             network=net,
-            ports={},
+            ports = {f"{port}/tcp": port+1},
         )
         # Give both time to start
         time.sleep(1.0)

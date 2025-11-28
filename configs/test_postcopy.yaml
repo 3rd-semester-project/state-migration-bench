@@ -3,7 +3,7 @@ general:
   results_dir: "results"
 
 clients:
-  count: 20
+  count: 5
   rate_hz: 20
   payload_bytes: 64
   timeout_ms: 800

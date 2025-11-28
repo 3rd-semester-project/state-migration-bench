@@ -24,22 +24,27 @@ class MigrationController:
     def __init__(self, cfg: Config, dm: DockerManager) -> None:
         self.cfg = cfg
         self.dm = dm
-        self.port = cfg.servers.port
+        #self.port = cfg.servers.port
+        self.host_ports: dict[str, int]= {} # service_alias => host port
+
+    def register_host_ports(self, server_a: Container, server_b: Container):
+        self.host_ports[server_a.name] = self.cfg.servers.port #5000
+        self.host_ports[server_b.name] = self.cfg.servers.port + 1 #5001
+
 
     # HTTP helpers
 
-    def _url(self, ip: str, path: str) -> str:
-        return f"http://{ip}:{self.port}{path}"
+    def _url(self, container: Container, path: str) -> str:
+        host_port = self.host_ports[container.name]
+        return f"http://localhost:{host_port}{path}"
 
     def _get_state(self, c: Container) -> Dict[str, Any]:
-        ip = self.dm.get_container_ip(c)
-        resp = requests.get(self._url(ip, "/state"), timeout=2)
+        resp = requests.get(self._url(c, "/state"), timeout=2)
         resp.raise_for_status()
         return resp.json()
 
     def _import_state(self, c: Container, state: Dict[str, Any]) -> None:
-        ip = self.dm.get_container_ip(c)
-        resp = requests.post(self._url(ip, "/state"), json=state, timeout=3)
+        resp = requests.post(self._url(c, "/state"), json=state, timeout=3)
         resp.raise_for_status()
 
     # Strategies

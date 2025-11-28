@@ -24,6 +24,8 @@ def run_benchmark(config_path: str) -> None:
 
     try:
         mc = MigrationController(cfg, dm)
+        mc.register_host_ports(server_a, server_b)
+
         win, consistency = mc.run(server_a, server_b)
 
         metrics = MetricsCollector(cfg).collect(
