@@ -41,7 +41,7 @@ CANDIDATE_KEYS = [
 STRATEGIES = ["precopy", "postcopy"]
 
 # Sizes to test (bytes or count depending on config semantics)
-TIMES_TO_TEST: List[int] = [5, 10, 20, 40, 80]
+TIMES_TO_TEST: List[int] = [5, 10, 20, 30]
 
 
 def load_yaml(path: Path) -> Any:
