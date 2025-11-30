@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = REPO_ROOT / "configs" / "base_example.yaml"
 BACKUP_PATH = CONFIG_PATH.with_suffix(".yaml.bak")
 RESULTS_DIR = REPO_ROOT / "results"
+LOGS_DIR = REPO_ROOT / "logs"
 # Resolve Python executable: prefer explicit `python3.13.exe`, fall back to system python
 PYTHON_EXE = shutil.which("python3.13.exe") or shutil.which("python3.13") or shutil.which("python") or sys.executable
 
@@ -71,7 +72,7 @@ def main() -> None:
             # Set run id and strategy for this sweep
             if "general" not in cfg or not isinstance(cfg.get("general"), dict):
                 cfg["general"] = {}
-            cfg["general"]["run_id"] = f"state_frequency_{strat}"
+            cfg["general"]["run_id"] = "state_frequency"
             if "migration" not in cfg or not isinstance(cfg.get("migration"), dict):
                 cfg["migration"] = {}
             cfg["migration"]["strategy"] = strat
@@ -79,8 +80,8 @@ def main() -> None:
             dump_yaml(cfg, CONFIG_PATH)
             print(f"Running benchmark with size {size} strategy {strat}...")
 
-            out_path = RESULTS_DIR / f"output_size_{size}_{strat}.log"
-            err_path = RESULTS_DIR / f"error_size_{size}_{strat}.log"
+            out_path = LOGS_DIR / f"output_size_{size}_{strat}.log"
+            err_path = LOGS_DIR / f"error_size_{size}_{strat}.log"
 
             # Invoke the benchmark module directly and capture output
             cmd = [PYTHON_EXE, "-m", "benchmark.orchestrator.cli", "-c", str(CONFIG_PATH)]

@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = REPO_ROOT / "configs" / "base_example.yaml"
 BACKUP_PATH = CONFIG_PATH.with_suffix(".yaml.bak")
 RESULTS_DIR = REPO_ROOT / "results"
+LOGS_DIR = REPO_ROOT / "logs"
 # Resolve Python executable: prefer explicit `python3.13.exe`, fall back to system python
 PYTHON_EXE = shutil.which("python3.13.exe") or shutil.which("python3.13") or shutil.which("python") or sys.executable
 
@@ -92,7 +93,7 @@ def run_one(size: int, strategy: str) -> int:
     # Set run id and migration strategy for this sweep
     if "general" not in cfg or not isinstance(cfg.get("general"), dict):
         cfg["general"] = {}
-    cfg["general"]["run_id"] = f"state_size_{strategy}"
+    cfg["general"]["run_id"] = "state_size"
     if "migration" not in cfg or not isinstance(cfg.get("migration"), dict):
         cfg["migration"] = {}
     cfg["migration"]["strategy"] = strategy
@@ -106,9 +107,9 @@ def run_one(size: int, strategy: str) -> int:
     cmd = [PYTHON_EXE, "-m", "benchmark.orchestrator.cli", "-c", str(CONFIG_PATH)]
 
     # Prepare output paths
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = RESULTS_DIR / f"run_output_size_{size}_{strategy}.log"
-    err_path = RESULTS_DIR / f"run_error_size_{size}_{strategy}.log"
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = LOGS_DIR / f"run_output_size_{size}_{strategy}.log"
+    err_path = LOGS_DIR / f"run_error_size_{size}_{strategy}.log"
 
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
