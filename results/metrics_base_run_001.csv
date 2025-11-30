@@ -1,0 +1,7 @@
+run_id,strategy,migration_time_ms,client_downtime_ms,latency_before_downtime_ms,packet_loss_during_migration_pct,total_packets_successful,total_packets,state_size_bytes
+base_run_001,precopy,1162.9939079284668,1162.9939079284668,0.0,19,286,290,1
+base_run_001,precopy,1119.4493770599365,1119.4493770599365,0.0,25,285,290,1
+base_run_001,precopy,1102.273941040039,1102.273941040039,0.0,26,285,290,1
+base_run_001,precopy,1068.4199333190918,1068.4199333190918,0.0,31,285,290,2
+base_run_001,precopy,1130.0599575042725,1130.0599575042725,0.0,25,287,292,1
+base_run_001,precopy,1211.0717296600342,1211.0717296600342,0.0,26,284,289,1
