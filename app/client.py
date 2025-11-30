@@ -8,7 +8,6 @@ from typing import Tuple
 
 import requests  # type: ignore
 
-
 def env_str(name: str, default: str) -> str:
     return os.environ.get(name, default)
 
@@ -35,36 +34,41 @@ def main():
 
     seq = 0
     rnd = random.Random(42 + int(client_id))
+    session = requests.Session()
+    next_deadline = time.perf_counter()
 
     while True:
         seq += 1
+        now_wall = time.time()
         payload = {
             "seq": seq,
-            "ts": time.time(),
+            "ts": now_wall,
             "size": payload_bytes,
             "blob": "x" * payload_bytes,
         }
-        send_ts = time.time()
+
+        send_ts_perf = time.perf_counter()
+        send_ts_wall = time.time()
         try:
-            resp = requests.post(
+            resp = session.post(
                 f"{base_url}/ingest",
                 json=payload,
                 timeout=timeout_ms / 1000.0,
             )
             if resp.ok:
-                recv_ts = time.time()
-                rtt_ms = (recv_ts - send_ts) * 1000.0
-                print(f"CSV:{seq},{send_ts:.6f},{recv_ts:.6f},{rtt_ms:.3f},ok")
+                recv_ts_wall = time.time()
+                rtt_ms = (time.perf_counter() - send_ts_perf) * 1000.0
+                print(f"CSV:{seq},{send_ts_wall:.6f},{recv_ts_wall:.6f},{rtt_ms:.3f},ok")
             else:
-                print(f"CSV:{seq},{send_ts:.6f},,,err_http")
+                print(f"CSV:{seq},{send_ts_wall:.6f},,,err_http")
         except Exception:
-            print(f"CSV:{seq},{send_ts:.6f},,,err_exc")
+            print(f"CSV:{seq},{send_ts_wall:.6f},,,err_exc")
         sys.stdout.flush()
-        # pacing
-        sleep_left = period - (time.time() - send_ts)
+
+        next_deadline += period
+        sleep_left = next_deadline - time.perf_counter()
         if sleep_left > 0:
             time.sleep(sleep_left)
-
 
 if __name__ == "__main__":
     main()

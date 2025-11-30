@@ -49,7 +49,7 @@ class MigrationController:
 
     # Strategies
 
-    def run(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency]:
+    def run(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency, int]:
         # Allow initial traffic
         time.sleep(self.cfg.migration.delay_s)
 
@@ -59,7 +59,7 @@ class MigrationController:
             return self._run_postcopy(server_a, server_b)
         return self._run_cold(server_a, server_b)
 
-    def _run_precopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency]:
+    def _run_precopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency, int]:
         pre_state = self._get_state(server_a)
         # Pre-transfer
         self._import_state(server_b, pre_state)
@@ -69,9 +69,9 @@ class MigrationController:
         end = now_ts()
         # Post consistency check
         post_state = self._get_state(server_b)
-        return MigrationWindow(start, end), self._consistency(pre_state, post_state)
+        return MigrationWindow(start, end), self._consistency(pre_state, post_state), int(post_state.get("payload_size", 0))
 
-    def _run_postcopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency]:
+    def _run_postcopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency, int]:
         start = now_ts()
         self.dm.switch_alias_postcopy(server_a, server_b)
         end = now_ts()
@@ -93,9 +93,9 @@ class MigrationController:
 
         pre_state = self._get_state(server_a)
         post_state = self._get_state(server_b)
-        return MigrationWindow(start, end), self._consistency(pre_state, post_state)
+        return MigrationWindow(start, end), self._consistency(pre_state, post_state), int(post_state.get("payload_size", 0))
 
-    def _run_cold(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency]:
+    def _run_cold(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency, int]:
         start = now_ts()
         self.dm.switch_alias_cold(server_a, server_b)
         pre_state = self._get_state(server_a)
@@ -105,9 +105,9 @@ class MigrationController:
         self.dm.attach_alias(server_b)
         end = now_ts()
         post_state = self._get_state(server_b)
-        return MigrationWindow(start, end), self._consistency(pre_state, post_state)
+        return MigrationWindow(start, end), self._consistency(pre_state, post_state), int(post_state.get("payload_size", 0))
 
     def _consistency(self, pre: Dict[str, Any], post: Dict[str, Any]) -> StateConsistency:
         pre_counter = int(pre.get("counter", 0))
         post_counter = int(post.get("counter", 0))
-        return StateConsistency(pre_counter=pre_counter, post_counter=post_counter, diff=abs(pre_counter - post_counter))
+        return StateConsistency(pre_counter=pre_counter, post_counter=post_counter, diff=abs(pre_counter - post_counter)) 

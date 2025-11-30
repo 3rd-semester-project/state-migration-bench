@@ -62,6 +62,20 @@ class MetricsCollector:
                     continue
         return rows
 
+    def _validate_coverage(self, pre: list[Dict[str, Any]], during: list[Dict[str, Any]], post: list[Dict[str, Any]]) -> None:
+        # Basic coherence checks: presence and status fields
+        def has_status(rs: list[Dict[str, Any]]) -> bool:
+            return all(("status" in r) for r in rs)
+        if not has_status(pre) or not has_status(during) or not has_status(post):
+            print("warn: missing status in some rows")
+        # Sequence monotonicity per client (optional but useful)
+        by_client: Dict[str, list[int]] = {}
+        for r in pre + during + post:
+            by_client.setdefault(r["client"], []).append(r["seq"])
+        for client, seqs in by_client.items():
+            if sorted(seqs) != seqs:
+                print(f"warn: non-monotonic seq for {client}")
+
     def _window_slices(self, rows: list[Dict[str, Any]], win: MigrationWindow) -> tuple[list[Dict[str, Any]], list[Dict[str, Any]], list[Dict[str, Any]]]:
         pre = [r for r in rows if r["send_ts"] < win.start_ts]
         during = [r for r in rows if win.start_ts <= r["send_ts"] <= win.end_ts]
@@ -81,27 +95,37 @@ class MetricsCollector:
     def _compute_latency_before(self, rows: list[Dict[str, Any]], win: MigrationWindow) -> float:
         before = [r for r in rows if r["send_ts"] < win.start_ts and r["status"] == "ok"]
         last_ok_ts = max([r["send_ts"] for r in before], default=win.start_ts)
-        latency_before = max(0.0, last_ok_ts - win.start_ts)
+        latency_before = max(0.0, win.start_ts - last_ok_ts)
         return latency_before
 
     def _compute_packet_metrics(
-        self, rows: list[Dict[str, Any]], win: MigrationWindow
-    ) -> tuple[int, int, int]:
+            self, rows: list[Dict[str, Any]], win: MigrationWindow
+        ) -> tuple[float, int, int, Dict[str, int]]:
+            pre, during, post = self._window_slices(rows, win)
+            self._validate_coverage(pre, during, post)
 
-        during = [r for r in rows if win.start_ts <= r["send_ts"] <= win.end_ts]
-        during_total = len(during)
-        during_ok = sum(1 for r in during if r.get("status") == "ok")
-        during_lost = max(0, during_total - during_ok)
+            during_total = len(during)
+            during_ok = sum(1 for r in during if r.get("status") == "ok")
+            during_lost = max(0, during_total - during_ok)
+            loss_pct_during = (during_lost / during_total * 100.0) if during_total > 0 else 0.0
 
-        if during_total > 0:
-            packet_loss_pct = int(round((during_lost / during_total) * 100))
-        else:
-            packet_loss_pct = 0
+            post_total = len(post)
+            post_ok = sum(1 for r in post if r.get("status") == "ok")
+            post_lost = max(0, post_total - post_ok)
+            loss_pct_post = (post_lost / post_total * 100.0) if post_total > 0 else 0.0
 
-        total_packets = len(rows)
-        total_packets_successful = sum(1 for r in rows if r.get("status") == "ok")
+            total_packets = len(rows)
+            total_packets_successful = sum(1 for r in rows if r.get("status") == "ok")
 
-        return packet_loss_pct, total_packets_successful, total_packets
+            debug_counts = {
+                "pre_total": len(pre),
+                "pre_ok": sum(1 for r in pre if r.get("status") == "ok"),
+                "during_total": during_total,
+                "during_ok": during_ok,
+                "post_total": len(post),
+                "post_ok": sum(1 for r in post if r.get("status") == "ok"),
+            }
+            return (during_lost + post_lost), total_packets_successful, total_packets, debug_counts
 
     def collect(
         self,
@@ -112,29 +136,24 @@ class MetricsCollector:
     ) -> Metrics:
         rows = self._parse_client_logs(containers)
 
-        downtime_s = self._compute_downtime(rows, win)
         latency_before_s = self._compute_latency_before(rows, win)
+        downtime_s = self._compute_downtime(rows, win)
 
         client_downtime_ms = downtime_s * 1000.0
         latency_before_downtime_ms = latency_before_s * 1000.0
         migration_time_ms = client_downtime_ms + latency_before_downtime_ms
-        (
-            packet_loss,
-            tot_packets_successful,
-            tot_packets,
-        ) = self._compute_packet_metrics(rows, win)
 
-        print("rows parsed list:", rows)
+        loss_pct_during, tot_packets_successful, tot_packets, dbg = self._compute_packet_metrics(rows, win)
+        print("window counts:", dbg)
+
         return Metrics(
             run_id=self.cfg.general.run_id,
             strategy=strategy,
             migration_time_ms=migration_time_ms,
             client_downtime_ms=client_downtime_ms,
             latency_before_downtime_ms=latency_before_downtime_ms,
-
-            packet_loss_during_migration_pct=packet_loss,
+            packet_loss_during_migration_pct=loss_pct_during,
             total_packets_successful=tot_packets_successful,
             total_packets=tot_packets,
-
             state_size_bytes=state_diff,
         )

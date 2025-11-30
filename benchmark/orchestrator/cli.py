@@ -26,16 +26,14 @@ def run_benchmark(config_path: str) -> None:
         mc = MigrationController(cfg, dm)
         mc.register_host_ports(server_a, server_b)
 
-        win, consistency = mc.run(server_a, server_b)
+        win, consistency, state_size = mc.run(server_a, server_b)
 
         metrics = MetricsCollector(cfg).collect(
-            containers=clients, win=win, state_diff=consistency.diff, strategy=cfg.migration.strategy
+            containers=clients, win=win, state_diff=state_size, strategy=cfg.migration.strategy
         )
         reporter = Reporter(cfg)
         csv_path = reporter.save_metrics_csv(metrics)
-        img_path = reporter.plot_metrics(metrics)
         print(f"Saved: {csv_path}")
-        print(f"Saved: {img_path}")
     finally:
         dm.stop_and_cleanup(run)
 
