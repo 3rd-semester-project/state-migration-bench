@@ -14,7 +14,7 @@ network:
   loss_pct: 0.0
 
 migration:
-  strategy: "precopy"   # precopy | postcopy | cold
+  strategy: "precopy"   # precopy | postcopy
   delay_s: 5
   postcopy_sync_s: 5
 

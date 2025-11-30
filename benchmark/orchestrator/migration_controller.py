@@ -58,7 +58,7 @@ class MigrationController:
             return self._run_precopy(server_a, server_b)
         if self.cfg.migration.strategy == "postcopy":
             return self._run_postcopy(server_a, server_b)
-        return self._run_cold(server_a, server_b)
+        raise ValueError(f"Unknown migration strategy: {self.cfg.migration.strategy}")
 
     def _run_precopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, MigrationWindow, MigrationWindow, StateConsistency]:
         # Total migration start: before initial pre-copy
@@ -163,28 +163,6 @@ class MigrationController:
         print("[postcopy] completed post consistency check at", now_ts() - total_start)
 
         # For postcopy there was no initial background copy; return an empty initial window
-        initial_window = MigrationWindow(total_start, total_start)
-        return (
-            MigrationWindow(total_start, total_end),
-            MigrationWindow(downtime_start, downtime_end),
-            initial_window,
-            self._consistency(pre_state, post_state),
-        )
-
-    def _run_cold(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, MigrationWindow, MigrationWindow, StateConsistency]:
-        total_start = now_ts()
-        # Cold cut: remove alias from A (clients disconnect)
-        downtime_start = now_ts()
-        self.dm.switch_alias_cold(server_a, server_b)
-        pre_state = self._get_state(server_a)
-        # Import into B
-        self._import_state(server_b, pre_state)
-        # Attach alias to B after import
-        self.dm.attach_alias(server_b)
-        downtime_end = now_ts()
-        post_state = self._get_state(server_b)
-        total_end = downtime_end
-        # No initial pre-copy window for cold; return empty initial window
         initial_window = MigrationWindow(total_start, total_start)
         return (
             MigrationWindow(total_start, total_end),
