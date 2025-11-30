@@ -1,0 +1,2 @@
+run_id,strategy,migration_time_ms,client_downtime_ms,latency_before_downtime_ms,packet_loss_during_migration_pct,total_packets_successful,total_packets,state_size_bytes
+state_size,precopy,1804.5294284820557,1374.6366500854492,452.6174068450928,20,587,591,65536000
