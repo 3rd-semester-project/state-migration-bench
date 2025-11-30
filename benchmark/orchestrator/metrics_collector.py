@@ -81,7 +81,8 @@ class MetricsCollector:
     def _compute_latency_before(self, rows: list[Dict[str, Any]], win: MigrationWindow) -> float:
         before = [r for r in rows if r["send_ts"] < win.start_ts and r["status"] == "ok"]
         last_ok_ts = max([r["send_ts"] for r in before], default=win.start_ts)
-        latency_before = max(0.0, last_ok_ts - win.start_ts)
+        # time between last successful send before downtime and the downtime start
+        latency_before = max(0.0, win.start_ts - last_ok_ts)
         return latency_before
 
     def _compute_packet_metrics(
@@ -106,25 +107,33 @@ class MetricsCollector:
     def collect(
         self,
         containers: list[Container],
-        win: MigrationWindow,
+        total_win: MigrationWindow,
+        downtime_win: MigrationWindow,
+        initial_win: MigrationWindow,
         state_diff: int,
         strategy: str,
     ) -> Metrics:
         rows = self._parse_client_logs(containers)
 
-        downtime_s = self._compute_downtime(rows, win)
-        latency_before_s = self._compute_latency_before(rows, win)
+        # Downtime calculations use the downtime window (clients disconnected)
+        downtime_s = self._compute_downtime(rows, downtime_win)
+
+        # latency_before should reflect the initial pre-copy duration (if any)
+        latency_before_s = max(0.0, initial_win.end_ts - initial_win.start_ts)
 
         client_downtime_ms = downtime_s * 1000.0
         latency_before_downtime_ms = latency_before_s * 1000.0
-        migration_time_ms = client_downtime_ms + latency_before_downtime_ms
+
+        # Migration time is the total migration window (from first action to reconnect)
+        migration_time_ms = (total_win.end_ts - total_win.start_ts) * 1000.0
+
         (
             packet_loss,
             tot_packets_successful,
             tot_packets,
-        ) = self._compute_packet_metrics(rows, win)
+        ) = self._compute_packet_metrics(rows, downtime_win)
 
-        print("rows parsed list:", rows)
+        #print("rows parsed list:", rows)
         return Metrics(
             run_id=self.cfg.general.run_id,
             strategy=strategy,

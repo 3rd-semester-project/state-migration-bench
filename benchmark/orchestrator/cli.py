@@ -26,10 +26,15 @@ def run_benchmark(config_path: str) -> None:
         mc = MigrationController(cfg, dm)
         mc.register_host_ports(server_a, server_b)
 
-        win, consistency = mc.run(server_a, server_b)
+        total_win, downtime_win, initial_win, consistency = mc.run(server_a, server_b)
 
         metrics = MetricsCollector(cfg).collect(
-            containers=clients, win=win, state_diff=consistency.diff, strategy=cfg.migration.strategy
+            containers=clients,
+            total_win=total_win,
+            downtime_win=downtime_win,
+            initial_win=initial_win,
+            state_diff=consistency.state_size_bytes,
+            strategy=cfg.migration.strategy,
         )
         reporter = Reporter(cfg)
         csv_path = reporter.save_metrics_csv(metrics)

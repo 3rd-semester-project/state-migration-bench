@@ -15,6 +15,8 @@ STATE: Dict[str, Any] = {
     "counter": 0,
     "last_seq": -1,
     "updated_ts": time.time(),
+    # blob now stores a mapping of counter->blob_value so we can track individual ingests
+    "blob": {},
 }
 
 
@@ -33,6 +35,13 @@ def ingest():
             STATE["last_seq"] = seq
             STATE["counter"] = int(STATE.get("counter", 0)) + 1
             STATE["updated_ts"] = time.time()
+            # Store the incoming blob under the new counter so each ingest is tracked
+            incoming = payload.get("blob", "") or ""
+            c = str(STATE["counter"])
+            # ensure blob is a dict
+            if not isinstance(STATE.get("blob"), dict):
+                STATE["blob"] = {}
+            STATE["blob"][c] = incoming
     return jsonify({"ack": True, "seq": seq, "server": STATE["server"], "counter": STATE["counter"]})
 
 
@@ -48,6 +57,16 @@ def state():
         STATE["counter"] = max(int(STATE.get("counter", 0)), int(data.get("counter", 0)))
         STATE["last_seq"] = max(int(STATE.get("last_seq", -1)), int(data.get("last_seq", -1)))
         STATE["updated_ts"] = time.time()
+        # Merge blob dicts: incoming blob should be a mapping of counter->value
+        incoming_blob = data.get("blob", {}) or {}
+        if not isinstance(incoming_blob, dict):
+            # fallback: if remote used old string format, keep existing blob
+            incoming_blob = {}
+        if not isinstance(STATE.get("blob"), dict):
+            STATE["blob"] = {}
+        for k, v in incoming_blob.items():
+            # prefer to import/overwrite entries from incoming state
+            STATE["blob"][k] = v
     return jsonify({"imported": True})
 
 

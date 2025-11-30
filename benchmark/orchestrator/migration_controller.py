@@ -18,6 +18,7 @@ class StateConsistency:
     pre_counter: int
     post_counter: int
     diff: int
+    state_size_bytes: int
 
 
 class MigrationController:
@@ -49,7 +50,7 @@ class MigrationController:
 
     # Strategies
 
-    def run(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency]:
+    def run(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, MigrationWindow, MigrationWindow, StateConsistency]:
         # Allow initial traffic
         time.sleep(self.cfg.migration.delay_s)
 
@@ -59,55 +60,159 @@ class MigrationController:
             return self._run_postcopy(server_a, server_b)
         return self._run_cold(server_a, server_b)
 
-    def _run_precopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency]:
-        pre_state = self._get_state(server_a)
-        # Pre-transfer
-        self._import_state(server_b, pre_state)
+    def _run_precopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, MigrationWindow, MigrationWindow, StateConsistency]:
+        # Total migration start: before initial pre-copy
+        total_start = now_ts()
 
-        start = now_ts()
-        self.dm.switch_alias_precopy(server_a, server_b)
-        end = now_ts()
+        # Initial pre-transfer while clients still connected to A
+        initial_start = now_ts()
+        print("[precopy] starting initial pre-transfer at", initial_start-total_start)
+        initial_state = self._get_state(server_a)
+        # mark where initial migration happened (log the counter)
+        try:
+            marker = int(initial_state.get("counter", 0))
+        except Exception:
+            marker = None
+        print(f"[precopy] initial pre-transfer marker counter={marker} at", now_ts()-total_start)
+        # Prepare a partial state that only includes blobs up to marker
+        initial_blob = {}
+        raw_blob = initial_state.get("blob", {}) or {}
+        if isinstance(raw_blob, dict) and marker is not None:
+            for k, v in raw_blob.items():
+                try:
+                    if int(k) <= marker:
+                        initial_blob[k] = v
+                except Exception:
+                    # ignore non-int keys
+                    continue
+        # Build minimal import payload
+        initial_import = {
+            "counter": marker or int(initial_state.get("counter", 0)),
+            "last_seq": int(initial_state.get("last_seq", -1)),
+            "blob": initial_blob,
+        }
+        self._import_state(server_b, initial_import)
+        initial_end = now_ts()
+        print("[precopy] completed initial pre-transfer at", initial_end-total_start)
+
+        initial_window = MigrationWindow(initial_start, initial_end)
+
+        # Now cut the client connection (clients will experience downtime)
+        downtime_start = now_ts()
+        print("[precopy] starting downtime at", downtime_start-total_start)
+        self.dm.drop_alias(server_a)
+
+        # Transfer the remaining state after cut
+        final_state = self._get_state(server_a)
+        # Prepare remaining blobs (those with counter > marker)
+        remaining_blob = {}
+        raw_final_blob = final_state.get("blob", {}) or {}
+        if isinstance(raw_final_blob, dict) and marker is not None:
+            for k, v in raw_final_blob.items():
+                try:
+                    if int(k) > marker:
+                        remaining_blob[k] = v
+                except Exception:
+                    continue
+        final_import = {
+            "counter": int(final_state.get("counter", 0)),
+            "last_seq": int(final_state.get("last_seq", -1)),
+            "blob": remaining_blob,
+        }
+        self._import_state(server_b, final_import)
+        print("[precopy] completed final transfer at", now_ts()-total_start)
+
+        # Reconnect clients to B
+        self.dm.attach_alias(server_b)
+        downtime_end = now_ts()
+        print("[precopy] ended downtime at", downtime_end-total_start)
+
         # Post consistency check
         post_state = self._get_state(server_b)
-        return MigrationWindow(start, end), self._consistency(pre_state, post_state)
+        print("[precopy] completed post consistency check at", now_ts()-total_start)
+        total_end = downtime_end
+        # Return (total_window, downtime_window, initial_window, consistency)
+        return (
+            MigrationWindow(total_start, total_end),
+            MigrationWindow(downtime_start, downtime_end),
+            initial_window,
+            self._consistency(initial_state, post_state),
+        )
 
-    def _run_postcopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency]:
-        start = now_ts()
-        self.dm.switch_alias_postcopy(server_a, server_b)
-        end = now_ts()
+    def _run_postcopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, MigrationWindow, MigrationWindow, StateConsistency]:
+        # Postcopy: disconnect clients first, then transfer, then reconnect
+        total_start = now_ts()
 
-        # Progressive sync for a limited window
-        def sync_loop():
-            stop_at = time.time() + self.cfg.migration.postcopy_sync_s
-            while time.time() < stop_at:
-                try:
-                    st = self._get_state(server_a)  # A remains connected (no alias)
-                    self._import_state(server_b, st)
-                except Exception:
-                    pass
-                time.sleep(0.3)
+        # Disconnect clients (start downtime)
+        downtime_start = now_ts()
+        self.dm.drop_alias(server_a)
 
-        t = threading.Thread(target=sync_loop, daemon=True)
-        t.start()
-        t.join()
-
+        # Transfer full state from A to B while clients disconnected
         pre_state = self._get_state(server_a)
-        post_state = self._get_state(server_b)
-        return MigrationWindow(start, end), self._consistency(pre_state, post_state)
+        self._import_state(server_b, pre_state)
 
-    def _run_cold(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, StateConsistency]:
-        start = now_ts()
+        # Reconnect clients to B
+        self.dm.attach_alias(server_b)
+        downtime_end = now_ts()
+
+        post_state = self._get_state(server_b)
+        total_end = downtime_end
+
+        # For postcopy there was no initial background copy; return an empty initial window
+        initial_window = MigrationWindow(total_start, total_start)
+        return (
+            MigrationWindow(total_start, total_end),
+            MigrationWindow(downtime_start, downtime_end),
+            initial_window,
+            self._consistency(pre_state, post_state),
+        )
+
+    def _run_cold(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, MigrationWindow, MigrationWindow, StateConsistency]:
+        total_start = now_ts()
+        # Cold cut: remove alias from A (clients disconnect)
+        downtime_start = now_ts()
         self.dm.switch_alias_cold(server_a, server_b)
         pre_state = self._get_state(server_a)
         # Import into B
         self._import_state(server_b, pre_state)
         # Attach alias to B after import
         self.dm.attach_alias(server_b)
-        end = now_ts()
+        downtime_end = now_ts()
         post_state = self._get_state(server_b)
-        return MigrationWindow(start, end), self._consistency(pre_state, post_state)
+        total_end = downtime_end
+        # No initial pre-copy window for cold; return empty initial window
+        initial_window = MigrationWindow(total_start, total_start)
+        return (
+            MigrationWindow(total_start, total_end),
+            MigrationWindow(downtime_start, downtime_end),
+            initial_window,
+            self._consistency(pre_state, post_state),
+        )
 
     def _consistency(self, pre: Dict[str, Any], post: Dict[str, Any]) -> StateConsistency:
         pre_counter = int(pre.get("counter", 0))
         post_counter = int(post.get("counter", 0))
-        return StateConsistency(pre_counter=pre_counter, post_counter=post_counter, diff=abs(pre_counter - post_counter))
+        # Compute blob size on post state as the size of the transferred state.
+        # New state format: blob is a dict of counter->blob_value. Sum lengths of values.
+        def total_blob_bytes(b):
+            if isinstance(b, dict):
+                try:
+                    return sum(len(v or "") for v in b.values())
+                except Exception:
+                    return 0
+            if b is None:
+                return 0
+            try:
+                return len(b)
+            except Exception:
+                return 0
+
+        pre_blob = pre.get("blob", {})
+        post_blob = post.get("blob", {})
+        state_bytes = total_blob_bytes(post_blob)
+        return StateConsistency(
+            pre_counter=pre_counter,
+            post_counter=post_counter,
+            diff=abs(pre_counter - post_counter),
+            state_size_bytes=state_bytes,
+        )

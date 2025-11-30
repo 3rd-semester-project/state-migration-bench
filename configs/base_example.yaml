@@ -4,8 +4,8 @@ general:
 
 clients:
   count: 5
-  rate_hz: 10
-  payload_bytes: 64
+  rate_hz: 20
+  payload_bytes: 1024000
   timeout_ms: 800
 
 network:
