@@ -163,6 +163,14 @@ def multiplot_state_frequency(df: pd.DataFrame, out_path: Path):
                 y = agg_df[metric].astype(float)
                 ax.plot(x, y, marker="o", label=metric, color=colors.get(metric))
 
+                # highlight a reference payload size with a vertical red line
+        try:
+            ref_hz = 20
+            ax.axvline(ref_hz, color="red", linestyle="--", linewidth=1)
+        except Exception:
+            pass
+
+
         ax.set_xlabel("rate_hz")
         ax.set_title(strat)
         ax.grid(True, which="both", ls="--", alpha=0.3)

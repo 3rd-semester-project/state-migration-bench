@@ -161,6 +161,13 @@ def multiplot_state_size(df: pd.DataFrame, out_path: Path):
                 y = agg_df[metric].astype(float)
                 ax.plot(x, y, marker="o", label=metric, color=colors.get(metric))
 
+        # highlight a reference payload size with a vertical red line
+        try:
+            ref_payload = 1024000
+            ax.axvline(ref_payload, color="red", linestyle="--", linewidth=1)
+        except Exception:
+            pass
+
         #ax.set_xscale("log")
         ax.set_xlabel("payload_bytes")
         # show full integer tick labels (no scientific 1e6 offset), with thousands separators

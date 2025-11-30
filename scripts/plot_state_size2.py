@@ -185,6 +185,12 @@ def multiplot_state_size(df: pd.DataFrame, out_path: Path):
             pass
         ax.set_title(strat)
         ax.grid(True, which="both", ls="--", alpha=0.3)
+        # draw vertical red line at delay_s = 5
+        try:
+            ax.axvline(5, color="red", linestyle="--", linewidth=1.5)
+        except Exception:
+            # if something goes wrong with the axvline call, continue without failing
+            pass
         ax.legend()
 
     axes[0].set_ylabel("milliseconds")
