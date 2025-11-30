@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 from typing import List
+import json
 
 import matplotlib.pyplot as plt  # type: ignore
 
@@ -18,7 +19,30 @@ class Reporter:
 
     def save_metrics_csv(self, m: Metrics) -> Path:
         out = self.results_dir / f"metrics_{self.cfg.general.run_id}.csv"
-        update_csv(out, [asdict(m)], list(asdict(m).keys()))
+        out.parent.mkdir(parents=True, exist_ok=True)
+
+        # Metrics row
+        metrics_row = asdict(m)
+
+        # Serialize the full config into a single compact JSON field `config_json`
+        try:
+            cfg_dict = asdict(self.cfg)
+        except Exception:
+            if hasattr(self.cfg, "to_dict"):
+                cfg_dict = self.cfg.to_dict()
+            elif hasattr(self.cfg, "__dict__"):
+                cfg_dict = dict(self.cfg.__dict__)
+            else:
+                cfg_dict = {}
+
+        config_json = json.dumps(cfg_dict, separators=(",", ":"), ensure_ascii=False)
+
+        # Combine metrics and config JSON; metrics keys first
+        combined = dict(metrics_row)
+        combined["config_json"] = config_json
+
+        fieldnames = list(metrics_row.keys()) + ["config_json"]
+        update_csv(out, [combined], fieldnames)
         return out
 
     def plot_metrics(self, m: Metrics) -> Path:
