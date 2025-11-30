@@ -146,17 +146,21 @@ class MigrationController:
         # Disconnect clients (start downtime)
         downtime_start = now_ts()
         self.dm.drop_alias(server_a)
+        print("[postcopy] clients disconnected at", downtime_start - total_start)
 
         # Transfer full state from A to B while clients disconnected
         pre_state = self._get_state(server_a)
         self._import_state(server_b, pre_state)
+        print("[postcopy] state transfer completed at", now_ts() - total_start)
 
         # Reconnect clients to B
         self.dm.attach_alias(server_b)
         downtime_end = now_ts()
+        print("[postcopy] clients reconnected at", downtime_end - total_start)
 
         post_state = self._get_state(server_b)
         total_end = downtime_end
+        print("[postcopy] completed post consistency check at", now_ts() - total_start)
 
         # For postcopy there was no initial background copy; return an empty initial window
         initial_window = MigrationWindow(total_start, total_start)
