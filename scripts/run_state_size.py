@@ -31,9 +31,13 @@ PYTHON_EXE = shutil.which("python3.13.exe") or shutil.which("python3.13") or shu
 # server initial blob size or number of initial ingests under 'servers.initial_state_size'
 # or similar.
 # We'll search for common candidate keys and set the value when found.
+
 CANDIDATE_KEYS = [
     ["clients", "payload_bytes"],
 ]
+
+# Migration strategies to test
+STRATEGIES = ["precopy", "postcopy"]
 
 # Sizes to test (bytes or count depending on config semantics)
 SIZES_TO_TEST: List[int] = [512000, 1024000, 2048000, 4096000, 8192000]  # e.g., 500KB to 8MB
@@ -76,8 +80,8 @@ def find_and_set(cfg: dict, sizestr: int) -> bool:
     return False
 
 
-def run_one(size: int) -> int:
-    print(f"Running benchmark for size={size}")
+def run_one(size: int, strategy: str) -> int:
+    print(f"Running benchmark for size={size} strategy={strategy}")
     # Load config
     cfg = load_yaml(CONFIG_PATH)
 
@@ -85,10 +89,13 @@ def run_one(size: int) -> int:
     ok = find_and_set(cfg, size)
     if not ok:
         print("Warning: couldn't find a suitable key to set state size in config. File unchanged.")
-    # Set run id for this sweep
+    # Set run id and migration strategy for this sweep
     if "general" not in cfg or not isinstance(cfg.get("general"), dict):
         cfg["general"] = {}
-    cfg["general"]["run_id"] = "state_size"
+    cfg["general"]["run_id"] = f"state_size_{strategy}"
+    if "migration" not in cfg or not isinstance(cfg.get("migration"), dict):
+        cfg["migration"] = {}
+    cfg["migration"]["strategy"] = strategy
     # Backup original on first run
     if not BACKUP_PATH.exists():
         shutil.copy2(CONFIG_PATH, BACKUP_PATH)
@@ -100,8 +107,8 @@ def run_one(size: int) -> int:
 
     # Prepare output paths
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = RESULTS_DIR / f"run_output_size_{size}.log"
-    err_path = RESULTS_DIR / f"run_error_size_{size}.log"
+    out_path = RESULTS_DIR / f"run_output_size_{size}_{strategy}.log"
+    err_path = RESULTS_DIR / f"run_error_size_{size}_{strategy}.log"
 
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -132,10 +139,11 @@ def main() -> None:
         sys.exit(2)
 
     failures = []
-    for s in SIZES_TO_TEST:
-        rc = run_one(s)
-        if rc != 0:
-            failures.append((s, rc))
+    for strat in STRATEGIES:
+        for s in SIZES_TO_TEST:
+            rc = run_one(s, strat)
+            if rc != 0:
+                failures.append(((strat, s), rc))
 
     # Restore backup
     if BACKUP_PATH.exists():
@@ -143,8 +151,8 @@ def main() -> None:
 
     if failures:
         print("Some runs failed:")
-        for s, rc in failures:
-            print(f" - size={s}, rc={rc}")
+        for (strat, s), rc in failures:
+            print(f" - strategy={strat} size={s}, rc={rc}")
         sys.exit(1)
     print("All runs finished successfully.")
 

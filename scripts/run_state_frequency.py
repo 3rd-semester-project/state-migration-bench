@@ -60,49 +60,50 @@ def main() -> None:
     if not BACKUP_PATH.exists():
         shutil.copy2(CONFIG_PATH, BACKUP_PATH)
 
-    for size in SIZES_TO_TEST:
-        cfg = original_cfg.copy()
-        if not find_and_set(cfg, size):
-            print(f"Warning: could not find suitable key to set size {size} in config.")
-            continue
+    STRATEGIES = ["precopy", "postcopy"]
+    for strat in STRATEGIES:
+        for size in SIZES_TO_TEST:
+            cfg = original_cfg.copy()
+            if not find_and_set(cfg, size):
+                print(f"Warning: could not find suitable key to set size {size} in config.")
+                continue
 
-        # Set run id for this sweep
-        if "general" not in cfg or not isinstance(cfg.get("general"), dict):
-            cfg["general"] = {}
-        cfg["general"]["run_id"] = "state_frequency"
+            # Set run id and strategy for this sweep
+            if "general" not in cfg or not isinstance(cfg.get("general"), dict):
+                cfg["general"] = {}
+            cfg["general"]["run_id"] = f"state_frequency_{strat}"
+            if "migration" not in cfg or not isinstance(cfg.get("migration"), dict):
+                cfg["migration"] = {}
+            cfg["migration"]["strategy"] = strat
 
-        dump_yaml(cfg, CONFIG_PATH)
-        print(f"Running benchmark with size {size}...")
+            dump_yaml(cfg, CONFIG_PATH)
+            print(f"Running benchmark with size {size} strategy {strat}...")
 
-        out_path = RESULTS_DIR / f"output_size_{size}.log"
-        err_path = RESULTS_DIR / f"error_size_{size}.log"
+            out_path = RESULTS_DIR / f"output_size_{size}_{strat}.log"
+            err_path = RESULTS_DIR / f"error_size_{size}_{strat}.log"
 
-        # Invoke the benchmark module directly and capture output
-        cmd = [PYTHON_EXE, "-m", "benchmark.orchestrator.cli", "-c", str(CONFIG_PATH)]
+            # Invoke the benchmark module directly and capture output
+            cmd = [PYTHON_EXE, "-m", "benchmark.orchestrator.cli", "-c", str(CONFIG_PATH)]
 
-        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-        out_path = RESULTS_DIR / f"output_size_{size}.log"
-        err_path = RESULTS_DIR / f"error_size_{size}.log"
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            except Exception as e:
+                err_text = f"Failed to start command {cmd}: {e}\n"
+                err_path.write_text(err_text, encoding="utf-8")
+                print(err_text)
+                continue
 
-        try:
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        except Exception as e:
-            err_text = f"Failed to start command {cmd}: {e}\n"
-            err_path.write_text(err_text, encoding="utf-8")
-            print(err_text)
-            continue
+            out, err = proc.communicate()
+            out_path.write_text(out or "", encoding="utf-8")
+            err_path.write_text(err or "", encoding="utf-8")
 
-        out, err = proc.communicate()
-        out_path.write_text(out or "", encoding="utf-8")
-        err_path.write_text(err or "", encoding="utf-8")
-
-        rc = proc.returncode
-        if rc is None:
-            print(f"Benchmark for size {size} did not complete properly. See {err_path}")
-        elif rc != 0:
-            print(f"Benchmark for size {size} failed with return code {rc}. See {err_path}")
-        else:
-            print(f"Benchmark for size {size} completed successfully.")
+            rc = proc.returncode
+            if rc is None:
+                print(f"Benchmark for size {size} did not complete properly. See {err_path}")
+            elif rc != 0:
+                print(f"Benchmark for size {size} failed with return code {rc}. See {err_path}")
+            else:
+                print(f"Benchmark for size {size} completed successfully.")
 
     # Restore original config
     if BACKUP_PATH.exists():
