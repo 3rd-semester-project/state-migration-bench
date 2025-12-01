@@ -20,10 +20,10 @@ class Metrics:
     # latency metrics (ms)
     migration_time_ms: float
     client_downtime_ms: float
-    latency_before_downtime_ms: float
+    migration_time_before_ms: float
 
     # packet metrics
-    packet_loss_during_migration_pct: int
+    packet_loss: int
     total_packets_successful: int
     total_packets: int
 
