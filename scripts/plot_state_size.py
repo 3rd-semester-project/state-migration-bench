@@ -262,8 +262,8 @@ def _save_table_svg(table_df, filename: Path, title: str | None = None):
     fig_w = max(6, 1.2 * cols)
     fig, ax = _plt.subplots(figsize=(fig_w, fig_h))
     ax.axis("off")
-    if title:
-        ax.set_title(title)
+    #if title:
+        #ax.set_title(title)
 
     table = ax.table(cellText=cell_text, colLabels=col_labels, cellLoc="center", loc="center")
     table.auto_set_font_size(False)
