@@ -40,12 +40,12 @@ class MigrationController:
         return f"http://localhost:{host_port}{path}"
 
     def _get_state(self, c: Container) -> Dict[str, Any]:
-        resp = requests.get(self._url(c, "/state"), timeout=2)
+        resp = requests.get(self._url(c, "/state"), timeout=30)
         resp.raise_for_status()
         return resp.json()
 
     def _import_state(self, c: Container, state: Dict[str, Any]) -> None:
-        resp = requests.post(self._url(c, "/state"), json=state, timeout=3)
+        resp = requests.post(self._url(c, "/state"), json=state, timeout=30)
         resp.raise_for_status()
 
     # Strategies
