@@ -151,7 +151,7 @@ class MetricsCollector:
             strategy=strategy,
             migration_time_ms=migration_time_ms,
             client_downtime_ms=client_downtime_ms,
-            latency_before_downtime_ms=latency_before_downtime_ms,
+            migration_time_before_ms=latency_before_downtime_ms,
             packet_loss_during_migration_pct=loss_pct_during,
             total_packets_successful=tot_packets_successful,
             total_packets=tot_packets,
