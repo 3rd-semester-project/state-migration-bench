@@ -14,7 +14,7 @@ from .utils import now_ts
 @dataclass
 class RunningSet:
     server_a: Container
-    server_b: Container
+    server_b: Optional[Container]
     clients: list[Container]
 
 
@@ -90,7 +90,7 @@ class DockerManager:
 
     # Containers
 
-    def run_servers(self) -> tuple[Container, Container]:
+    def run_servers(self) -> tuple[Container, Optional[Container]]:
         port = self.cfg.servers.port
         net = self.cfg.servers.network_name
 
@@ -107,22 +107,26 @@ class DockerManager:
                 "PORT": str(port),
             },
             network=net,
-            ports = {f"{port}/tcp": port}
+            ports={f"{port}/tcp": port},
         )
-        server_b = self.client.containers.run(
-            self.cfg.servers.image_server,
-            name="server_b",
-            detach=True,
-            environment={
-                "SERVER_NAME": "server_b",
-                "PORT": str(port),
-            },
-            network=net,
-            ports = {f"{port}/tcp": port+1},
-        )
-        # Give both time to start
+
+        server_b: Optional[Container] = None
+        if self.cfg.migration.dest_preboot:
+            server_b = self.client.containers.run(
+                self.cfg.servers.image_server,
+                name="server_b",
+                detach=True,
+                environment={
+                    "SERVER_NAME": "server_b",
+                    "PORT": str(port),
+                },
+                network=net,
+                ports={f"{port}/tcp": port + 1},
+            )
+
+        # Give started containers time to come up
         time.sleep(1.0)
-        # Ensure alias points to A (reconnect with alias)
+        # Ensure alias points to A
         self.attach_alias(server_a)
         return server_a, server_b
 
@@ -149,6 +153,28 @@ class DockerManager:
             clients.append(c)
         return clients
 
+    def run_server_b(self) -> Container:
+        # Start server_b on demand (used when dest_preboot is false)
+        port = self.cfg.servers.port
+        net = self.cfg.servers.network_name
+
+        # Be safe in case a stale container exists
+        self._remove_if_exists("server_b")
+
+        server_b = self.client.containers.run(
+            self.cfg.servers.image_server,
+            name="server_b",
+            detach=True,
+            environment={
+                "SERVER_NAME": "server_b",
+                "PORT": str(port),
+            },
+            network=net,
+            ports={f"{port}/tcp": port + 1},
+        )
+        time.sleep(1.0)
+        return server_b
+
     def switch_alias_precopy(self, server_a: Container, server_b: Container) -> None:
         # Drop alias from A (keep it connected), then attach alias to B
         self.drop_alias(server_a)
@@ -169,7 +195,8 @@ class DockerManager:
             self._safe_stop(c)
         # Stop servers
         self._safe_stop(run.server_a)
-        self._safe_stop(run.server_b)
+        if run.server_b is not None:
+            self._safe_stop(run.server_b)
         # Remove network alias if any lingering
         # Network cleanup left to user to preserve logs; can be pruned manually
 

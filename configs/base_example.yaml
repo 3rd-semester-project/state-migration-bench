@@ -1,5 +1,5 @@
 general:
-  run_id: state_frequency
+  run_id: default_run
   results_dir: results
 clients:
   count: 5
@@ -14,6 +14,8 @@ migration:
   strategy: precopy
   delay_s: 5
   postcopy_sync_s: 5
+  dest_preboot: false
+
 servers:
   service_alias: service
   port: 5000

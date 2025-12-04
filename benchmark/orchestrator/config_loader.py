@@ -31,6 +31,7 @@ class MigrationConfig:
     strategy: Strategy
     delay_s: float
     postcopy_sync_s: float = 5.0  # used only for postcopy
+    dest_preboot: bool = True
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,7 @@ def load_config(path: str | Path) -> Config:
         strategy=str(data["migration"]["strategy"]).lower(),  # type: ignore
         delay_s=float(data["migration"]["delay_s"]),
         postcopy_sync_s=float(data["migration"].get("postcopy_sync_s", 5.0)),
+        dest_preboot=bool(data["migration"].get("dest_preboot", True)),
     )
     _require(migration.strategy in ("precopy", "postcopy", "cold"), "invalid migration.strategy")
     _require(migration.delay_s >= 0, "migration.delay_s must be >= 0")

@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
-from typing import Literal, Tuple, Dict, Any
+from typing import Literal, Tuple, Dict, Any, Optional
 
 import requests
 from docker.models.containers import Container  # type: ignore
@@ -28,9 +28,11 @@ class MigrationController:
         #self.port = cfg.servers.port
         self.host_ports: dict[str, int]= {} # service_alias => host port
 
-    def register_host_ports(self, server_a: Container, server_b: Container):
+    def register_host_ports(self, server_a: Container, server_b: Optional[Container]):
         self.host_ports[server_a.name] = self.cfg.servers.port #5000
-        self.host_ports[server_b.name] = self.cfg.servers.port + 1 #5001
+        if server_b is not None:
+            self.host_ports[server_b.name] = self.cfg.servers.port + 1 #5001
+        
 
 
     # HTTP helpers
@@ -54,15 +56,22 @@ class MigrationController:
         # Allow initial traffic
         time.sleep(self.cfg.migration.delay_s)
 
+
         if self.cfg.migration.strategy == "precopy":
             return self._run_precopy(server_a, server_b)
         if self.cfg.migration.strategy == "postcopy":
             return self._run_postcopy(server_a, server_b)
         raise ValueError(f"Unknown migration strategy: {self.cfg.migration.strategy}")
 
-    def _run_precopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, MigrationWindow, MigrationWindow, StateConsistency]:
+    def _run_precopy(self, server_a: Container, server_b: Optional[Container]) -> Tuple[MigrationWindow, MigrationWindow, MigrationWindow, StateConsistency]:
         # Total migration start: before initial pre-copy
         total_start = now_ts()
+
+        if self.cfg.migration.dest_preboot == False:
+            if server_b is None:
+                server_b = self.dm.run_server_b() # run server B if not already running
+                self.register_host_ports(server_a, server_b)
+                print("[migration] destination pre-booted before migration")
 
         # Initial pre-transfer while clients still connected to A
         initial_start = now_ts()
@@ -142,6 +151,13 @@ class MigrationController:
     def _run_postcopy(self, server_a: Container, server_b: Container) -> Tuple[MigrationWindow, MigrationWindow, MigrationWindow, StateConsistency]:
         # Postcopy: disconnect clients first, then transfer, then reconnect
         total_start = now_ts()
+
+        if self.cfg.migration.dest_preboot == False:
+            if server_b is None:
+                server_b = self.dm.run_server_b() # run server B if not already running
+                print("[migration] destination pre-booted before migration")
+                self.register_host_ports(server_a, server_b)
+
 
         # Disconnect clients (start downtime)
         downtime_start = now_ts()
