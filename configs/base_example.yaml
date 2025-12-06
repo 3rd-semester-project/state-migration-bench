@@ -1,26 +1,24 @@
 general:
-  run_id: "base_run_001"
-  results_dir: "results"
-
+  run_id: default_run
+  results_dir: results
 clients:
   count: 5
-  rate_hz: 10
-  payload_bytes: 64
+  rate_hz: 20
+  payload_bytes: 1024000
   timeout_ms: 800
-
 network:
   latency_ms: 0
   jitter_ms: 0
   loss_pct: 0.0
-
 migration:
-  strategy: "precopy"   # precopy | postcopy | cold
+  strategy: precopy
   delay_s: 5
   postcopy_sync_s: 5
+  dest_preboot: false
 
 servers:
-  service_alias: "service"
+  service_alias: service
   port: 5000
-  image_server: "migration_test/server:latest"
-  image_client: "migration_test/client:latest"
-  network_name: "bench_net"
+  image_server: migration_test/server:latest
+  image_client: migration_test/client:latest
+  network_name: bench_net

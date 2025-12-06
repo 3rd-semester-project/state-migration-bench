@@ -28,6 +28,16 @@ def write_csv(path: Path, rows: Iterable[Dict[str, Any]], fieldnames: list[str])
         for r in rows:
             writer.writerow(r)
 
+def update_csv(path: Path, rows: Iterable[Dict[str, Any]], fieldnames: list[str]) -> None:
+    file_exists = path.exists()
+    ensure_dir(path.parent)
+    with path.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        for r in rows:
+            writer.writerow(r)
+
 
 @dataclass(frozen=True)
 class MigrationWindow:
