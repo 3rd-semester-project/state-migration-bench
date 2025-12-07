@@ -80,9 +80,6 @@ def create_stats_table(df: "pd.DataFrame", strategy: str = "precopy", x_col: str
         "migration_time_ms",
         "client_downtime_ms",
         "latency_before_downtime_ms",
-        "packet_loss_during_migration_pct",
-        "total_packets_successful",
-        "total_packets",
         "state_size_bytes",
     ]
 
@@ -163,7 +160,7 @@ def multiplot_state_size(df: pd.DataFrame, out_path: Path):
         x = agg_df["delay_s"].astype(float)
 
         # choose metrics: postcopy only shows client_downtime_ms, precopy shows all
-        metrics_to_plot = ["client_downtime_ms"] if strat == "postcopy" else [
+        metrics_to_plot = [
             "migration_time_ms",
             "client_downtime_ms",
             "latency_before_downtime_ms",

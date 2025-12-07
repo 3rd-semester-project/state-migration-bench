@@ -14,7 +14,7 @@ migration:
   strategy: precopy
   delay_s: 5
   postcopy_sync_s: 5
-  dest_preboot: false
+  dest_preboot: true
 
 servers:
   service_alias: service

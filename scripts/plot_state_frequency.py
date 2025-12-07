@@ -49,7 +49,7 @@ def create_stats_table(df: "pd.DataFrame", strategy: str = "precopy", x_col: str
     """
     df2 = df.copy()
 
-    # ensure x_col exists (extract from config_yaml if needed)
+    # ensure x_col exists (extract from config_json if needed)
     if x_col not in df2.columns or df2[x_col].isna().all():
         def _extract(s: str):
             try:
@@ -58,7 +58,7 @@ def create_stats_table(df: "pd.DataFrame", strategy: str = "precopy", x_col: str
             except Exception:
                 return None
 
-        df2[x_col] = df2["config_yaml"].apply(_extract)
+        df2[x_col] = df2["config_json"].apply(_extract)
     df2[x_col] = pd.to_numeric(df2[x_col], errors="coerce")
 
     # filter by strategy
@@ -71,9 +71,6 @@ def create_stats_table(df: "pd.DataFrame", strategy: str = "precopy", x_col: str
         "migration_time_ms",
         "client_downtime_ms",
         "latency_before_downtime_ms",
-        "packet_loss_during_migration_pct",
-        "total_packets_successful",
-        "total_packets",
         "state_size_bytes",
     ]
 
@@ -125,7 +122,7 @@ def multiplot_state_frequency(df: pd.DataFrame, out_path: Path):
             ax.set_title(strat)
             continue
 
-        # extract rate_hz from config_yaml if not present or NaN
+        # extract rate_hz from config_json if not present or NaN
         if "rate_hz" not in sub.columns or sub["rate_hz"].isna().all():
             def _extract_rate(s: str):
                 try:
@@ -135,7 +132,7 @@ def multiplot_state_frequency(df: pd.DataFrame, out_path: Path):
                     return None
 
             sub = sub.copy()
-            sub["rate_hz"] = sub["config_yaml"].apply(_extract_rate)
+            sub["rate_hz"] = sub["config_json"].apply(_extract_rate)
             sub["rate_hz"] = pd.to_numeric(sub["rate_hz"], errors="coerce")
 
         sub = sub.sort_values("rate_hz")
@@ -152,7 +149,7 @@ def multiplot_state_frequency(df: pd.DataFrame, out_path: Path):
         x = agg_df["rate_hz"].astype(float)
 
         # choose metrics: postcopy only shows client_downtime_ms, precopy shows all
-        metrics_to_plot = ["client_downtime_ms"] if strat == "postcopy" else [
+        metrics_to_plot = [
             "migration_time_ms",
             "client_downtime_ms",
             "latency_before_downtime_ms",
