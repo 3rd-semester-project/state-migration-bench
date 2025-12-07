@@ -47,6 +47,9 @@ class MigrationController:
         return resp.json()
 
     def _import_state(self, c: Container, state: Dict[str, Any]) -> None:
+        latency = self.cfg.network.latency_ms
+        if latency and latency > 0:
+            time.sleep(latency / 1000.0)
         resp = requests.post(self._url(c, "/state"), json=state, timeout=30)
         resp.raise_for_status()
 
