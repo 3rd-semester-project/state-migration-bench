@@ -77,13 +77,26 @@ class MetricsCollector:
         downtime = max(0.0, first_ok_ts - last_ok_ts)
         return downtime
 
+    def _compute_migration_time(self, rows: list[Dict[str, Any]], win: MigrationWindow) -> float:
+        after = [r for r in rows if r["send_ts"] > win.end_ts and r["status"] == "ok"]
+        first_ok_after_ts = min([r["send_ts"] for r in after], default=win.end_ts)
+
+        migration_time = max(0.0, first_ok_after_ts - win.start_ts)
+        return migration_time
+
     # Compute latency just between the last ok before migration and migration start
-    def _compute_latency_before(self, rows: list[Dict[str, Any]], win: MigrationWindow) -> float:
-        before = [r for r in rows if r["send_ts"] < win.start_ts and r["status"] == "ok"]
-        last_ok_ts = max([r["send_ts"] for r in before], default=win.start_ts)
-        # time between last successful send before downtime and the downtime start
-        latency_before = max(0.0, win.start_ts - last_ok_ts)
-        return latency_before
+    def _compute_latency_before(
+        self,
+        rows: list[Dict[str, Any]],
+        total_win: MigrationWindow,
+        downtime_win: MigrationWindow,
+    ) -> float:
+        """
+        Latency before downtime: from migration start to the last OK send before downtime start.
+        """
+        before = [r for r in rows if r["send_ts"] < downtime_win.start_ts and r["status"] == "ok"]
+        last_ok_send_ts = max([r["send_ts"] for r in before], default=total_win.start_ts)
+        return max(0.0, last_ok_send_ts - total_win.start_ts)
 
     def _compute_packet_metrics(
         self, rows: list[Dict[str, Any]], win: MigrationWindow
@@ -119,13 +132,13 @@ class MetricsCollector:
         downtime_s = self._compute_downtime(rows, downtime_win)
 
         # latency_before should reflect the initial pre-copy duration (if any)
-        latency_before_s = max(0.0, initial_win.end_ts - initial_win.start_ts)
+        latency_before_s = self._compute_latency_before(rows, total_win, downtime_win)
 
         client_downtime_ms = downtime_s * 1000.0
         latency_before_downtime_ms = latency_before_s * 1000.0
 
         # Migration time is the total migration window (from first action to reconnect)
-        migration_time_ms = (total_win.end_ts - total_win.start_ts) * 1000.0
+        migration_time_ms = self._compute_migration_time(rows, total_win) * 1000.0
 
         (
             packet_loss,
