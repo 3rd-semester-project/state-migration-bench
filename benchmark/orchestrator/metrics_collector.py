@@ -28,7 +28,8 @@ class Metrics:
     total_packets: int
 
     # state metrics
-    state_size_bytes: int
+    initial_state_size_bytes: int
+    final_state_size_bytes: int
 
 
 class MetricsCollector:
@@ -123,7 +124,8 @@ class MetricsCollector:
         total_win: MigrationWindow,
         downtime_win: MigrationWindow,
         initial_win: MigrationWindow,
-        state_diff: int,
+        initial_state_size: int,
+        final_state_size: int,
         strategy: str,
     ) -> Metrics:
         rows = self._parse_client_logs(containers)
@@ -158,5 +160,6 @@ class MetricsCollector:
             total_packets_successful=tot_packets_successful,
             total_packets=tot_packets,
 
-            state_size_bytes=state_diff,
+            initial_state_size_bytes=initial_state_size,
+            final_state_size_bytes=final_state_size,
         )

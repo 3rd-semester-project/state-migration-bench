@@ -71,7 +71,8 @@ def create_stats_table(df: "pd.DataFrame", strategy: str = "precopy", x_col: str
         "migration_time_ms",
         "client_downtime_ms",
         "latency_before_downtime_ms",
-        "state_size_bytes",
+        "initial_state_size_bytes",
+        "final_state_size_bytes",
     ]
 
     # use named aggregation: output_col -> (input_col, aggfunc)
@@ -219,14 +220,15 @@ def _save_table_svg(table_df, filename: Path, title: str | None = None):
         "packet_loss_during_migration_pct": "loss_pct",
         "total_packets_successful": "succ_pkts",
         "total_packets": "total_pkts",
-        "state_size_bytes": "state",
+        "initial_state_size_bytes": "init_state",
+        "final_state_size_bytes": "final_state",
         "runs": "runs",
     }
 
     for c in df_disp.columns.tolist():
         if c in ["runs", "total_packets", "total_packets_successful"]:
             df_disp[c] = df_disp[c].map(lambda v: f"{int(v):,}" if pd.notna(v) else "")
-        elif c == "state_size_bytes":
+        elif c in ["initial_state_size_bytes", "final_state_size_bytes"]:
             df_disp[c] = df_disp[c].map(lambda v: format_bytes(v) if pd.notna(v) else "")
         elif c in ["migration_time_ms", "client_downtime_ms", "latency_before_downtime_ms"]:
             df_disp[c] = df_disp[c].map(lambda v: f"{v:,.1f}" if pd.notna(v) else "")

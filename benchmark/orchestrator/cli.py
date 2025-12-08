@@ -33,7 +33,8 @@ def run_benchmark(config_path: str) -> None:
             total_win=total_win,
             downtime_win=downtime_win,
             initial_win=initial_win,
-            state_diff=consistency.state_size_bytes,
+            initial_state_size=consistency.initial_state_size_bytes,
+            final_state_size=consistency.final_state_size_bytes,
             strategy=cfg.migration.strategy,
         )
         reporter = Reporter(cfg)

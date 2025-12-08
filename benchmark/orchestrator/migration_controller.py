@@ -17,7 +17,8 @@ class StateConsistency:
     pre_counter: int
     post_counter: int
     diff: int
-    state_size_bytes: int
+    initial_state_size_bytes: int
+    final_state_size_bytes: int
 
 
 class MigrationController:
@@ -104,7 +105,7 @@ class MigrationController:
             marker = None
         print(f"[precopy] initial pre-transfer marker counter={marker} at", now_ts()-total_start)
         max_counter = marker if marker is not None else None
-        _ = self._pull_state_remote(
+        initial_info = self._pull_state_remote(
             server_b,
             source_internal_url,
             max_counter_inclusive=max_counter,
@@ -139,7 +140,8 @@ class MigrationController:
         consistency = self._consistency(
             source_counter=int(final_info.get("source_counter", 0)),
             dest_counter=int(final_info.get("dest_counter", 0)),
-            state_size_bytes=int(final_info.get("state_size_bytes", 0)),
+            initial_state_size_bytes=int(initial_info.get("state_size_bytes", 0)),
+            final_state_size_bytes=int(final_info.get("state_size_bytes", 0)),
         )
         return (
             MigrationWindow(total_start, total_end),
@@ -186,7 +188,8 @@ class MigrationController:
         consistency = self._consistency(
             source_counter=int(pull_info.get("source_counter", 0)),
             dest_counter=int(pull_info.get("dest_counter", 0)),
-            state_size_bytes=int(pull_info.get("state_size_bytes", 0)),
+            initial_state_size_bytes=0,
+            final_state_size_bytes=int(pull_info.get("state_size_bytes", 0)),
         )
         return (
             MigrationWindow(total_start, total_end),
@@ -195,10 +198,11 @@ class MigrationController:
             consistency,
         )
 
-    def _consistency(self, source_counter: int, dest_counter: int, state_size_bytes: int) -> StateConsistency:
+    def _consistency(self, source_counter: int, dest_counter: int, initial_state_size_bytes: int, final_state_size_bytes: int) -> StateConsistency:
         return StateConsistency(
             pre_counter=source_counter,
             post_counter=dest_counter,
             diff=abs(source_counter - dest_counter),
-            state_size_bytes=state_size_bytes,
+            initial_state_size_bytes=initial_state_size_bytes,
+            final_state_size_bytes=final_state_size_bytes,
         )
