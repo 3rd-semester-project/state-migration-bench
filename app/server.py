@@ -89,8 +89,35 @@ def state_meta():
 @app.route("/state", methods=["GET", "POST"])
 def state():
     if request.method == "GET":
+        def _as_int(val: Optional[Any]) -> Optional[int]:
+            try:
+                return int(val) if val is not None else None
+            except Exception:
+                return None
+
+        min_counter_exclusive = _as_int(request.args.get("min_counter_exclusive"))
+        max_counter_inclusive = _as_int(request.args.get("max_counter_inclusive"))
+
         with STATE_LOCK:
             s = dict(STATE)
+        
+        # Filter blob if counter bounds are provided
+        if min_counter_exclusive is not None or max_counter_inclusive is not None:
+            raw_blob = s.get("blob", {}) or {}
+            filtered_blob: Dict[str, Any] = {}
+            if isinstance(raw_blob, dict):
+                for k, v in raw_blob.items():
+                    try:
+                        key_int = int(k)
+                    except Exception:
+                        continue
+                    if min_counter_exclusive is not None and key_int <= min_counter_exclusive:
+                        continue
+                    if max_counter_inclusive is not None and key_int > max_counter_inclusive:
+                        continue
+                    filtered_blob[k] = v
+                s["blob"] = filtered_blob
+        
         return jsonify(s)
     data = request.get_json(force=True, silent=True) or {}
     _merge_state(data)
@@ -127,8 +154,15 @@ def pull_state():
     min_counter_exclusive = _as_int(payload.get("min_counter_exclusive"))
     max_counter_inclusive = _as_int(payload.get("max_counter_inclusive") or payload.get("max_counter"))
 
+    # Build query parameters for filtered state fetch
+    params = {}
+    if min_counter_exclusive is not None:
+        params["min_counter_exclusive"] = str(min_counter_exclusive)
+    if max_counter_inclusive is not None:
+        params["max_counter_inclusive"] = str(max_counter_inclusive)
+
     try:
-        remote = requests.get(f"{source_url}/state", timeout=30)
+        remote = requests.get(f"{source_url}/state", params=params, timeout=30)
         remote.raise_for_status()
         remote_state: Dict[str, Any] = remote.json()
     except Exception as exc:
@@ -137,23 +171,11 @@ def pull_state():
     remote_counter = int(remote_state.get("counter", 0))
     remote_last_seq = int(remote_state.get("last_seq", -1))
     remote_blob = remote_state.get("blob", {}) or {}
-    filtered_blob: Dict[str, Any] = {}
-    if isinstance(remote_blob, dict):
-        for k, v in remote_blob.items():
-            try:
-                key_int = int(k)
-            except Exception:
-                continue
-            if min_counter_exclusive is not None and key_int <= min_counter_exclusive:
-                continue
-            if max_counter_inclusive is not None and key_int > max_counter_inclusive:
-                continue
-            filtered_blob[k] = v
 
     import_payload = {
         "counter": remote_counter,
         "last_seq": remote_last_seq,
-        "blob": filtered_blob,
+        "blob": remote_blob,
     }
     _merge_state(import_payload)
 
