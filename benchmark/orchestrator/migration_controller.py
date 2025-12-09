@@ -105,6 +105,8 @@ class MigrationController:
             marker = None
         print(f"[precopy] initial pre-transfer marker counter={marker} at", now_ts()-total_start)
         max_counter = marker if marker is not None else None
+        added_latency = self.cfg.network.latency_ms if self.cfg.network else 0
+        time.sleep(added_latency / 1000.0)  # simulate network latency during precopy
         initial_info = self._pull_state_remote(
             server_b,
             source_internal_url,
@@ -121,6 +123,7 @@ class MigrationController:
         self.dm.drop_alias(server_a)
         print("[precopy] clients disconnected at", now_ts()-total_start)
         # Transfer the remaining state after cut
+        time.sleep(added_latency / 1000.0)  # simulate network latency during final transfer
         final_info = self._pull_state_remote(
             server_b,
             source_internal_url,
@@ -172,6 +175,8 @@ class MigrationController:
         print("[postcopy] clients disconnected at", downtime_start - total_start)
 
         # Transfer full state from A to B while clients disconnected
+        added_latency = self.cfg.network.latency_ms if self.cfg.network else 0
+        time.sleep(added_latency / 1000.0)  # simulate network latency during precopy
         pull_info = self._pull_state_remote(server_b, source_internal_url)
         print("[postcopy] state transfer completed at", now_ts() - total_start)
 

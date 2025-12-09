@@ -19,7 +19,7 @@ CANDIDATE_KEYS = [
     ["network", "latency_ms"],
 ]
 
-SIZES_TO_TEST: List[int] = [0, 50, 100, 500, 1000, 5000, 10000]  #example latencies in ms
+SIZES_TO_TEST: List[int] = [0, 50, 100, 500, 1000, 5000]  #example latencies in ms
 
 def load_yaml(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as f:
